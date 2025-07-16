@@ -1,0 +1,7 @@
+bleak
+torch
+transformers
+speechrecognition
+pyaudio
+opencv-python
+Pillow

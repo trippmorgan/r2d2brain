@@ -5,3 +5,5 @@ speechrecognition
 pyaudio
 opencv-python
 Pillow
+spherov2
+numpy

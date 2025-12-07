@@ -7,7 +7,7 @@ pip install spherov2
 - Voice command interface
 - Camera-based object detection
 - WebSocket control interface
-
+npm install @abandonware/noble
 ## Getting Started
 ```bash
 git clone https://github.com/trippmorgan/r2d2brain.git

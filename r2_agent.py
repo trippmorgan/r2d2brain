@@ -1,10 +1,13 @@
 """
 R2-D2 AI Agent — Gemini or Ollama backend with voice/text input.
 Merges the best of r2_gemini_agent.py and r2_unified.py.
+Now includes live sensor context for AI decision-making.
 """
 import time
+import math
 import json
 import requests
+import threading
 import config
 
 try:
@@ -14,7 +17,9 @@ except ImportError:
     HAS_VOICE = False
 
 from spherov2 import scanner
+from spherov2.sphero_edu import SpheroEduAPI, EventType
 from spherov2.toy.r2d2 import R2D2
+from spherov2.types import Color
 
 # --- System prompt (shared across backends) ---
 SYSTEM_PROMPT = """
@@ -83,6 +88,78 @@ class OllamaBackend:
         if text.startswith("```"):
             text = text.split("\n", 1)[1].rsplit("```", 1)[0].strip()
         return json.loads(text)
+
+
+class SensorState:
+    """Tracks live sensor data and recent events for AI context."""
+
+    def __init__(self):
+        self.accel = {"x": 0, "y": 0, "z": 0}
+        self.gyro = {"x": 0, "y": 0, "z": 0}
+        self.location = {"x": 0, "y": 0}
+        self.velocity = {"x": 0, "y": 0}
+        self.orientation = {"pitch": 0, "roll": 0, "yaw": 0}
+        self.last_collision_time = None
+        self.last_collision_loc = None
+        self.collision_count = 0
+        self.stance = "bipod"
+        self.running = False
+        self._lock = threading.Lock()
+
+    def start(self, droid):
+        self.running = True
+        self._thread = threading.Thread(target=self._loop, args=(droid,), daemon=True)
+        self._thread.start()
+
+    def stop(self):
+        self.running = False
+
+    def _loop(self, droid):
+        while self.running:
+            try:
+                with self._lock:
+                    self.accel = droid.get_acceleration()
+                    self.gyro = droid.get_gyroscope()
+                    self.location = droid.get_location()
+                    self.velocity = droid.get_velocity()
+                    self.orientation = droid.get_orientation()
+            except Exception:
+                pass
+            time.sleep(config.SENSOR_POLL_RATE)
+
+    def on_collision(self, api):
+        with self._lock:
+            self.collision_count += 1
+            self.last_collision_time = time.time()
+            try:
+                self.last_collision_loc = api.get_location()
+            except Exception:
+                self.last_collision_loc = {"x": 0, "y": 0}
+
+    def context_string(self) -> str:
+        with self._lock:
+            speed = math.hypot(self.velocity.get("x", 0), self.velocity.get("y", 0))
+            loc = self.location
+            ori = self.orientation
+            coll_str = "None"
+            if self.last_collision_time:
+                ago = time.time() - self.last_collision_time
+                cl = self.last_collision_loc or {}
+                coll_str = f"{ago:.0f}s ago at ({cl.get('x',0):.0f}, {cl.get('y',0):.0f})"
+            return (
+                f"\n[SENSOR STATE]\n"
+                f"Position: (x={loc.get('x',0):.0f}, y={loc.get('y',0):.0f})\n"
+                f"Heading: {ori.get('yaw',0):.0f}°\n"
+                f"Speed: {speed:.1f}\n"
+                f"Orientation: pitch={ori.get('pitch',0):.0f}° roll={ori.get('roll',0):.0f}° yaw={ori.get('yaw',0):.0f}°\n"
+                f"Last collision: {coll_str}\n"
+                f"Total collisions: {self.collision_count}\n"
+                f"Stance: {self.stance}\n"
+            )
+
+
+# Global sensor state (set during main)
+_sensor_state = None
 
 
 def get_backend():
@@ -186,15 +263,27 @@ def main():
     ai = get_backend()
 
     # Connect to R2-D2
-    print(f"\nSearching for R2-D2 ({config.R2_UUID})...")
-    toy = scanner.find_toy(address=config.R2_UUID)
+    global _sensor_state
+    print(f"\nSearching for R2-D2...")
+    toy = scanner.find_R2D2()
     if not toy:
         print("R2-D2 not found.")
         return
 
-    with R2D2(toy) as r2:
+    print(f"✅ Found: {toy.name}")
+
+    with SpheroEduAPI(toy) as droid:
         print("R2-D2 Connected!")
-        r2.play_sound(R2D2.Audio.R2_hey_1)
+        try:
+            toy.play_audio_file(R2D2.Audio.R2_HEY_1, 1)
+        except Exception:
+            pass
+
+        # Start sensor streaming
+        _sensor_state = SensorState()
+        droid.register_event(EventType.on_collision, _sensor_state.on_collision)
+        _sensor_state.start(droid)
+        print("📡 Sensor streaming active")
 
         while True:
             # Get input
@@ -209,10 +298,13 @@ def main():
                 print("Shutting down...")
                 break
 
+            # Append sensor context to the message
+            enriched = user_text + _sensor_state.context_string()
+
             # Think
             print("R2 is thinking...")
             try:
-                data = ai.send(user_text)
+                data = ai.send(enriched)
                 ai_reply = data.get("response", "(*Beep*)")
                 action = data.get("action", "none")
                 params = data.get("parameters", {})
@@ -221,10 +313,14 @@ def main():
 
                 if action != "none":
                     print(f"> Action: {action} | Params: {params}")
-                    execute_action(r2, action, params)
+                    if action == "tripod":
+                        _sensor_state.stance = "tripod" if params.get("deploy", True) else "bipod"
+                    execute_action(toy, action, params)
 
             except Exception as e:
                 print(f"AI/Logic Error: {e}")
+
+        _sensor_state.stop()
 
 
 if __name__ == "__main__":

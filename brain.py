@@ -6,7 +6,7 @@ import threading
 # --- IMPORTS ---
 try:
     from spherov2 import scanner
-    from spherov2.sphero_edu import SpheroEduAPI
+    from spherov2.sphero_edu import SpheroEduAPI, EventType
     from spherov2.toy.r2d2 import R2D2
     from spherov2.types import Color
 except ImportError:
@@ -70,16 +70,43 @@ def main():
     print(f"✅ Found: {toy.name}")
     print("🔌 Connecting and Waking Up...")
 
+    # Collision state
+    collision_count = [0]  # mutable for closure
+
+    def on_collision_brain(api):
+        collision_count[0] += 1
+        print(f"   💥 COLLISION #{collision_count[0]}!")
+        try:
+            api.stop_roll()
+            api.set_main_led(Color(255, 0, 0))
+            toy.play_audio_file(R2D2.Audio.R2_SCREAM, 0)
+            time.sleep(0.5)
+            # Back up
+            ori = api.get_orientation()
+            back = (int(ori.get("yaw", 0)) + 180) % 360
+            api.roll(back, 40, 1.0)
+            time.sleep(1.0)
+            api.stop_roll()
+            # Turn away
+            new_heading = (back + random.randint(60, 120)) % 360
+            api.set_heading(new_heading)
+            api.set_main_led(Color(0, 0, 255))
+        except Exception as e:
+            print(f"   ⚠️ Collision response error: {e}")
+
     # 2. CONNECTION (The Hybrid Method)
     # We use SpheroEduAPI for the connection/handshake context
     with SpheroEduAPI(toy) as droid:
-        
+
+        # Register collision handler
+        droid.register_event(EventType.on_collision, on_collision_brain)
+
         # --- WAKE UP ROUTINE ---
         droid.set_main_led(Color(0, 0, 255))
         # Use 'toy' for R2 specific commands
         toy.play_audio_file(R2D2.Audio.R2_HEY_1, 1)
         toy.set_head_position(0) # Center head
-        print("⚡ R2-D2 is Online!")
+        print("⚡ R2-D2 is Online! (Collision detection active)")
 
         # 3. MODE SELECTION
         mode = ""

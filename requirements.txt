@@ -1,9 +1,13 @@
+spherov2
 bleak
-torch
-transformers
+google-generativeai
+requests
+python-dotenv
 speechrecognition
 pyaudio
+keyboard
+numpy
+torch
+transformers
 opencv-python
 Pillow
-spherov2
-numpy

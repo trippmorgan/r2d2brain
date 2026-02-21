@@ -1,53 +1,86 @@
+# R2D2 Brain 🛰️🤖
 
-# R2D2 Brain
-pip install google-generativeai
-This project powers an AI-enhanced robotic brain for the Sphero R2D2 toy using Python and vision/audio inputs.
-pip install spherov2
+AI-powered brain for the Sphero R2-D2, with voice control, vision, and autonomous behavior.
+
 ## Features
-- Voice command interface
-- Camera-based object detection
-- WebSocket control interface
-npm install @abandonware/noble
-## Getting Started
+
+- **AI Agent** — Gemini or local Ollama models control R2's physical actions via structured JSON
+- **Voice Control** — Speech recognition for hands-free interaction
+- **Text Control** — Terminal-based command interface
+- **Autonomous Mode** — Random behavior with personality (via `brain.py`)
+- **BLE Protocol** — Low-level Bluetooth control (Node.js reference in `r2_chirp.js`)
+- **Vision** — Camera-based object detection (WIP)
+
+## Quick Start
+
 ```bash
 git clone https://github.com/trippmorgan/r2d2brain.git
 cd r2d2brain
-conda activate myenv && pip install bleak
+
+# Install dependencies
 pip install -r requirements.txt
+
+# Copy and edit config
+cp .env.example .env
+# Edit .env with your API keys and settings
+
+# Run the AI agent
 python run.py
-pip install "numpy<2.0,>=1.23.5"
-# R2D2Brain 🛰️🤖
-pip install spherov2
-Interactive R2-D2 Controller powered by voice, vision, and Bluetooth Low Energy (BLE)!
-python -m r2d2brain.run
+```
 
-Connects to R2D2 via BLE and lets you interact using speech and camera vision.
-To run these scripts, you'll need to:
-1. Install Dependencies
-pip install spherov2 bleak
-For the keyboard control script, you'll also need:
-pip install keyboard
-2. Run a Script
-Make sure your R2D2 is powered on and Bluetooth is enabled on your Mac, then:
-# Basic connection test
-python3 hellor2d2.py
+## Architecture
 
-# Collision detection demo
-python3 animatetestr2.py
+The agent follows a simple loop:
 
-# Keyboard control (requires sudo for keyboard access)
-sudo python3 keyboardr2d2.py
-3. For the AI Brain (r2d2brain)
-This requires more setup:
-cd r2d2brain
-pip install -r requirements.txt
-python3 run.py
-Note: The brain module needs:
-A microphone for voice commands
-The Qwen2VL model downloaded to a ./models folder
-Your specific R2D2's Bluetooth address (currently hardcoded in brain.py)
-Troubleshooting
-"No Sphero toy found" - Make sure R2D2 is on and not connected to another device
-Bluetooth permission errors - On macOS, grant Terminal/your IDE Bluetooth access in System Preferences → Privacy & Security → Bluetooth
-keyboard module errors - Must run with sudo on macOS
-Would you like me to help with any specific script or setup issue?
+```
+User Input (voice/text) → AI Backend (Gemini/Ollama) → JSON Response → Robot Action
+```
+
+1. **Input** — Voice (speech recognition) or text (terminal)
+2. **AI** — The backend receives the input plus a system prompt describing available actions
+3. **JSON** — The AI responds with structured JSON containing a text response and an action
+4. **Action** — The agent translates the JSON into physical R2-D2 commands (drive, animate, turn, etc.)
+
+## Files
+
+| File | Description |
+|------|-------------|
+| `r2_agent.py` | Main AI agent — Gemini + Ollama backends, voice/text input |
+| `brain.py` | Standalone controller — no AI, direct command matching with voice/text/autonomous modes |
+| `config.py` | Configuration loader (env vars / `.env` file) |
+| `vision.py` | Vision module — camera-based object detection (WIP) |
+| `ble_controller.py` | BLE control layer using `bleak` |
+| `utils.py` | Low-level packet builder for BLE commands |
+| `r2_chirp.js` | Low-level BLE implementation (Node.js reference) |
+| `run.py` | Entry point — runs the AI agent |
+| `utils/r2_alive.py` | Hardware test — lights, sounds, animations, movement |
+| `utils/r2_capabilities.py` | Dumps all available sounds and animations |
+| `utils/r2_test_actions.py` | Tests robot actions via BLE controller |
+| `utils/test_controller.py` | Tests controller methods |
+| `utils/test_connection.py` | Basic BLE connection test |
+| `utils/keyboard_r2.py` | WASD keyboard control |
+
+## Configuration
+
+Copy `.env.example` to `.env` and edit:
+
+```bash
+# AI Backend: "gemini" or "ollama"
+AI_BACKEND=ollama
+
+# Google Gemini API Key (required if AI_BACKEND=gemini)
+GOOGLE_API_KEY=your-key-here
+
+# Ollama settings (local model support)
+OLLAMA_URL=http://100.101.184.20:11434
+OLLAMA_MODEL=mistral-small:24b
+
+# R2-D2 Bluetooth UUID
+R2_UUID=25B16450-58FD-1AC7-D75F-D9F2B6969811
+```
+
+## Hardware
+
+- **Sphero R2-D2** (Bluetooth LE)
+- **Microphone** (for voice mode)
+- **Camera** (for vision mode, optional)

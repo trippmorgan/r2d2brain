@@ -14,6 +14,8 @@ except ImportError:
     print("   Run: pip install spherov2")
     sys.exit(1)
 
+import config
+
 try:
     import speech_recognition as sr
     HAS_VOICE = True

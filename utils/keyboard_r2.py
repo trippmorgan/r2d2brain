@@ -1,11 +1,15 @@
+import sys
+import os
 import time
 import keyboard
 from spherov2 import scanner
 from spherov2.sphero_edu import SpheroEduAPI
 from spherov2.types import Color
 
-# Your specific R2-D2 UUID found earlier
-R2_UUID = "25B16450-58FD-1AC7-D75F-D9F2B6969811"
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import config
+
+R2_UUID = config.R2_UUID
 
 def main():
     print(f"Searching for R2-D2 ({R2_UUID})...")
